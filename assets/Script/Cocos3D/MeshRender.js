@@ -49,8 +49,6 @@ module.exports=cc.Class({
     _activateMaterial: function () {
         // Get material
         let texture = this.texture.getTexture();
-        let url = texture.url;
-        let key = url;
         var material = new Materials.SimpleMeshMaterial();
         material.setTexture(texture);
         material.updateHash();
