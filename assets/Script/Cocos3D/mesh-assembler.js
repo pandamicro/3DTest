@@ -1,17 +1,8 @@
 const renderer = cc.renderer
 var math = renderer.renderEngine.math
 const RenderData = renderer.renderEngine.RenderData;
-const vec3 = math.vec3
+const vec3 = math.vec3;
 
-function update(meshRender){
-    let renderData = meshRender._renderData;
-    if (renderData.uvDirty) {
-        updateUVs(meshRender);
-    }
-    if (renderData.vertDirty) {
-        updateVerts(meshRender);
-    }
-}
 function updateUVs(meshRender)
 {
     let material = meshRender.getMaterial();
@@ -34,8 +25,8 @@ function updateUVs(meshRender)
 }
 function updateVerts(meshRender)
 {
-    let renderData = meshRender._renderData
-    let meshData = meshRender._meshData
+    let renderData = meshRender._renderData;
+    let meshData = meshRender._meshData;
     let data = renderData._data;
     let length = renderData.dataLength;
     let vert_x = meshData.vert_x;
@@ -58,18 +49,18 @@ function fillVertexBuffer(meshRender, index, vbuf, uintbuf)
     
     node._updateWorldMatrix();
     let matrix = node._worldMatrix;
-    let meshData = meshRender._meshData
+    let meshData = meshRender._meshData;
     let length = renderData.dataLength;
     let tempVert = {}
     for (let i = 0; i < length; i++) {
         let vert = data[i];
-        vec3.transformMat4(tempVert,vert,matrix)
+        vec3.transformMat4(tempVert,vert,matrix);
         vbuf[index + 0] = tempVert.x;
         vbuf[index + 1] = tempVert.y;
         vbuf[index + 2] = tempVert.z;
-        vbuf[index + 4] = vert.u;
-        vbuf[index + 5] = vert.v;
-        uintbuf[index + 3] = color;
+        vbuf[index + 3] = vert.u;
+        vbuf[index + 4] = vert.v;
+        uintbuf[index + 5] = color;
         index += 6;
     }
 }
@@ -83,34 +74,51 @@ function fillIndexBuffer (meshRender, offset, vertexId, ibuf) {
     return;
 }
 
-module.exports = cc.js.addon({
+module.exports = {
     useModel: false,
-    datas: [],
     updateRenderData (meshRender) {
-        this.datas.length = 0;
         if(!meshRender._meshData){
-            return this.datas;
+            return;
         }
         // Create render data if needed
-        if (!meshRender._renderData) {
-            let renderData = RenderData.alloc();
+        let renderData = meshRender._renderData;
+        if (!renderData) {
+            renderData = RenderData.alloc();
             let meshData = meshRender._meshData;
             renderData.dataLength = meshData.vert_x.length;
             renderData.vertexCount = meshData.vert_x.length;
             renderData.indiceCount = meshData.idx.length;
-            meshRender._renderData = renderData
+            renderData.material = meshRender.getMaterial();
+            meshRender._renderData = renderData;
         }
-        let renderData = meshRender._renderData;
+        // 需要强制设置为 dirty 吗？
         renderData.vertDirty = true;
-        renderData.material = meshRender.getMaterial();
-        update(meshRender);
-        this.datas.push(renderData);
-        return this.datas;
+        if (renderData.uvDirty) {
+            updateUVs(meshRender);
+        }
+        if (renderData.vertDirty) {
+            updateVerts(meshRender);
+        }
     },
-    fillBuffers (meshRender, batchData, vertexId, vbuf, uintbuf, ibuf) {
-        let vertexOffset = batchData.byteOffset / 4,
-            indiceOffset = batchData.indiceOffset;
-        fillVertexBuffer(meshRender, vertexOffset, vbuf, uintbuf);
-        fillIndexBuffer(meshRender, indiceOffset, vertexId, ibuf);
+    fillBuffers (comp, renderer) {
+        // 动态获取 buffer
+        let buffer = renderer.getBuffer('mesh', comp._vertexFormat),
+            vertexOffset = buffer.byteOffset >> 2,
+            vbuf = buffer._vData,
+            uintbuf = buffer._uintVData;
+        
+        let ibuf = buffer._iData,
+            indiceOffset = buffer.indiceOffset,
+            vertexId = buffer.vertexOffset;
+
+        // 请求足够的 buffer 空间
+        buffer.request(comp._renderData.vertexCount, comp._renderData.indiceCount);
+            
+        // 填充 buffer
+        fillVertexBuffer(comp, vertexOffset, vbuf, uintbuf);
+        fillIndexBuffer(comp, indiceOffset, vertexId, ibuf);
+
+        // Force update render data every frame
+        comp.node._renderFlag |= cc.RenderFlow.FLAG_UPDATE_RENDER_DATA;
     }
-});
+};
